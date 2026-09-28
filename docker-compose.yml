@@ -1,0 +1,18 @@
+services:
+  # Executa a calculadora. Troque os argumentos em "command" ou use:
+  #   docker compose run --rm calculadora --aluno "Maria" --notas 8 7.5 9
+  calculadora:
+    build:
+      context: .
+      target: runtime
+    image: calculadora-notas:latest
+    command: ["--aluno", "Maria", "--notas", "8", "7.5", "9"]
+
+  # Roda a suíte de testes dentro do container:
+  #   docker compose run --rm testes
+  testes:
+    build:
+      context: .
+      target: test
+    image: calculadora-notas:test
+    profiles: ["test"]
