@@ -124,7 +124,7 @@ docker compose -f docker-compose.test.yml down -v
 
 ### GitHub Codespaces
 
-O repositório tem um `.devcontainer/devcontainer.json` com Python 3.12 e Docker. Em
+O repositório tem um `.devcontainer/devcontainer.json` com Python e Docker (imagem `universal:2`). Em
 **Code → Codespaces → Create codespace on main**, os comandos acima funcionam no terminal.
 Ao terminar, pare o Codespace para não gastar horas: `gh codespace stop` ou, na página
 github.com/codespaces, **⋯ → Stop codespace**.
