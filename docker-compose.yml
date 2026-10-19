@@ -1,18 +1,99 @@
-services:
-  # Executa a calculadora. Troque os argumentos em "command" ou use:
-  #   docker compose run --rm calculadora --aluno "Maria" --notas 8 7.5 9
-  calculadora:
-    build:
-      context: .
-      target: runtime
-    image: calculadora-notas:latest
-    command: ["--aluno", "Maria", "--notas", "8", "7.5", "9"]
+# Stack da Calculadora de Notas
+#
+#   docker compose up -d --build --wait     # sobe API + PostgreSQL + Redis
+#   docker compose ps                       # status e healthchecks
+#   docker compose run --rm calculadora --aluno "Maria" --notas 8 7.5 9
+#   docker compose down                     # para tudo (os volumes ficam)
+#   docker compose down -v                  # para tudo e apaga os volumes
+#
+# Senhas e portas podem ser trocadas num arquivo .env (veja .env.example).
+name: calculadora-notas
 
-  # Roda a suíte de testes dentro do container:
-  #   docker compose run --rm testes
-  testes:
-    build:
-      context: .
-      target: test
-    image: calculadora-notas:test
-    profiles: ["test"]
+# Imagem criada na atividade anterior (Dockerfile multi-stage, estágio
+# runtime), publicada pelo CI no GitHub Container Registry. Com "build"
+# junto, "docker compose up --build" gera a imagem localmente com o mesmo nome;
+# sem --build, "docker compose pull" baixa a versão publicada.
+x-app-image: &app-image
+  image: ${APP_IMAGE:-ghcr.io/davi-barbara-carvalho/calculadora-notas:latest}
+  build:
+    context: .
+    target: runtime
+
+services:
+  # API HTTP: calcula boletins, grava no Postgres e usa o Redis como cache.
+  api:
+    <<: *app-image
+    entrypoint: ["gunicorn"]
+    command: ["--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "calculadora.api:create_app()"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-calculadora}:${POSTGRES_PASSWORD:-calculadora}@db:5432/${POSTGRES_DB:-calculadora}
+      REDIS_URL: redis://cache:6379/0
+      CACHE_TTL: "60"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    healthcheck:
+      # A imagem slim não tem curl: o próprio Python faz a requisição.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [frontend, backend]
+    restart: unless-stopped
+
+  # Banco de dados: guarda o histórico de boletins.
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-calculadora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-calculadora}
+      POSTGRES_DB: ${POSTGRES_DB:-calculadora}
+    volumes:
+      - pgdata:/var/lib/postgresql/data                          # dados persistem entre "down" e "up"
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro  # cria a tabela na 1ª execução
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+    restart: unless-stopped
+
+  # Cache: guarda a listagem do histórico (GET /boletins) por CACHE_TTL segundos.
+  cache:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+    restart: unless-stopped
+
+  # CLI da atividade anterior: só roda sob demanda (profile "cli").
+  #   docker compose run --rm calculadora --aluno "João" --notas 5 6 4
+  calculadora:
+    <<: *app-image
+    command: ["--aluno", "Maria", "--notas", "8", "7.5", "9"]
+    profiles: ["cli"]
+    network_mode: none   # a CLI não precisa de rede
+    restart: "no"
+
+networks:
+  # Rede exposta: a porta da API é publicada por aqui.
+  frontend:
+  # Rede interna: banco e cache não têm acesso externo nem portas publicadas.
+  backend:
+    internal: true
+
+volumes:
+  pgdata:
+  redisdata:

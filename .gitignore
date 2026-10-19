@@ -17,3 +17,5 @@ coverage.xml
 .vscode/
 .idea/
 .DS_Store
+
+.env

@@ -1,0 +1,19 @@
+{
+  // Ambiente do GitHub Codespaces: Python 3.12 + Docker (docker-in-docker),
+  // para rodar "docker compose" direto no terminal do Codespace.
+  "name": "calculadora-notas",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "API calculadora-notas" }
+  },
+  "hostRequirements": { "cpus": 2 },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "ms-azuretools.vscode-docker"]
+    }
+  }
+}

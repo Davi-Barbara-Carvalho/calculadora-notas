@@ -46,7 +46,7 @@ jobs:
           if-no-files-found: error
 
   docker:
-    name: Imagem Docker
+    name: Docker Compose
     runs-on: ubuntu-latest
     needs: ci
 
@@ -56,40 +56,45 @@ jobs:
 
     env:
       IMAGE: ghcr.io/${{ github.repository }}
+      # Nome local da imagem gerada pelo docker-compose.yml (serviços api e calculadora).
+      APP_IMAGE: calculadora-notas:latest
 
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4
 
-      - name: Configurar Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build da imagem de testes
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: test
-          tags: calculadora-notas:test
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Executar testes dentro do container
-        run: docker run --rm calculadora-notas:test
-
-      - name: Build da imagem final
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: runtime
-          tags: calculadora-notas:latest
-          load: true
-          cache-from: type=gha
-
-      - name: Teste de fumaça da imagem
+      - name: Testes automáticos (docker-compose.test.yml)
         run: |
-          docker run --rm calculadora-notas:latest --aluno "Maria" --notas 8 7.5 9 | tee saida.txt
+          docker compose -f docker-compose.test.yml up --build \
+            --abort-on-container-exit --exit-code-from testes
+
+      - name: Derrubar ambiente de testes
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+      - name: Subir a stack (docker-compose.yml)
+        run: docker compose up -d --build --wait
+
+      - name: Teste de fumaça da API
+        run: |
+          curl -fsS -X POST http://localhost:8000/boletins \
+            -H 'Content-Type: application/json' \
+            -d '{"aluno": "Maria", "notas": [8, 7.5, 9]}' | tee resposta.json
+          grep -q '"situacao":"Aprovado"' resposta.json
+          curl -fsS http://localhost:8000/boletins | grep -q '"aluno": "Maria"'
+
+      - name: Teste de fumaça da CLI
+        run: |
+          docker compose run --rm calculadora --aluno "Maria" --notas 8 7.5 9 | tee saida.txt
           grep -q "Situação: Aprovado" saida.txt
+
+      - name: Logs dos containers
+        if: failure()
+        run: docker compose logs
+
+      - name: Derrubar a stack
+        if: always()
+        run: docker compose down -v
 
       - name: Login no GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -103,7 +108,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           IMAGE_LC=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
-          docker tag calculadora-notas:latest "$IMAGE_LC:latest"
-          docker tag calculadora-notas:latest "$IMAGE_LC:${GITHUB_SHA::7}"
+          docker tag "$APP_IMAGE" "$IMAGE_LC:latest"
+          docker tag "$APP_IMAGE" "$IMAGE_LC:${GITHUB_SHA::7}"
           docker push "$IMAGE_LC:latest"
           docker push "$IMAGE_LC:${GITHUB_SHA::7}"

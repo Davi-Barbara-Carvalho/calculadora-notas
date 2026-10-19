@@ -1,0 +1,58 @@
+# Ambiente descartável para os testes automáticos (usado no CI).
+#
+#   docker compose -f docker-compose.test.yml up --build \
+#       --abort-on-container-exit --exit-code-from testes
+#   docker compose -f docker-compose.test.yml down -v
+#
+# O código de saída é o do pytest: 0 = passou, diferente de 0 = falhou.
+name: calculadora-notas-test
+
+services:
+  # Estágio "test" do Dockerfile: roda o pytest com cobertura,
+  # incluindo os testes de integração da API contra Postgres e Redis reais.
+  testes:
+    build:
+      context: .
+      target: test
+    image: calculadora-notas:test
+    environment:
+      DATABASE_URL: postgresql://teste:teste@db-test:5432/teste
+      REDIS_URL: redis://cache-test:6379/0
+    depends_on:
+      db-test:
+        condition: service_healthy
+      cache-test:
+        condition: service_healthy
+    networks: [testes]
+    restart: "no"
+
+  db-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: teste
+      POSTGRES_PASSWORD: teste
+      POSTGRES_DB: teste
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    # Dados em memória: mais rápido e some ao final dos testes.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teste -d teste"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    networks: [testes]
+
+  cache-test:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    networks: [testes]
+
+networks:
+  testes:
+    internal: true

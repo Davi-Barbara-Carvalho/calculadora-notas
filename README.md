@@ -83,13 +83,51 @@ docker build --target test -t calculadora-notas:test .
 docker run --rm calculadora-notas:test
 ```
 
+
 ### Com Docker Compose
 
+O `docker-compose.yml` usa a imagem do projeto e sobe uma stack completa:
+
+| Serviço       | Imagem                                    | Função                                                  | Rede                 | Volume       |
+|---------------|-------------------------------------------|---------------------------------------------------------|----------------------|--------------|
+| `api`         | `ghcr.io/davi-barbara-carvalho/calculadora-notas` | API HTTP (Gunicorn + Flask) na porta 8000         | `frontend`, `backend`| -            |
+| `db`          | `postgres:16-alpine`                      | Guarda o histórico de boletins                          | `backend`            | `pgdata`     |
+| `cache`       | `redis:7-alpine`                          | Cache da listagem `GET /boletins`                       | `backend`            | `redisdata`  |
+| `calculadora` | `ghcr.io/davi-barbara-carvalho/calculadora-notas` | CLI da atividade anterior (profile `cli`)         | nenhuma              | -            |
+
+- **Redes:** `frontend` publica a porta da API; `backend` é `internal`, então banco e cache não ficam expostos.
+- **Volumes:** `pgdata` e `redisdata` mantêm os dados entre um `down` e um `up` (só `down -v` apaga).
+- **Reinício:** `restart: unless-stopped` em `api`, `db` e `cache`; a CLI usa `restart: "no"`.
+- **Healthchecks:** a API só sobe depois de banco e cache saudáveis (`depends_on: condition: service_healthy`).
+
 ```bash
-docker compose up --build                                          # roda o exemplo padrão
-docker compose run --rm calculadora --aluno "João" --notas 5 6 4   # com outros argumentos
-docker compose --profile test run --rm testes                      # roda os testes
+docker compose up -d --build --wait                                # sobe a stack
+docker compose ps                                                  # status
+curl -X POST localhost:8000/boletins -H 'Content-Type: application/json' \
+     -d '{"aluno": "Maria", "notas": [8, 7.5, 9]}'                 # cria um boletim
+curl -i localhost:8000/boletins                                    # histórico (X-Cache: MISS/HIT)
+docker compose run --rm calculadora --aluno "João" --notas 5 6 4   # CLI
+docker compose down                                                # para (mantém os volumes)
 ```
+
+Endpoints da API: `GET /health`, `POST /boletins`, `GET /boletins`.
+
+### Testes automáticos com Compose
+
+O `docker-compose.test.yml` cria um ambiente descartável (Postgres em `tmpfs` e Redis) e roda
+toda a suíte, incluindo os testes de integração da API (`tests/test_api.py`):
+
+```bash
+docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from testes
+docker compose -f docker-compose.test.yml down -v
+```
+
+### GitHub Codespaces
+
+O repositório tem um `.devcontainer/devcontainer.json` com Python 3.12 e Docker. Em
+**Code → Codespaces → Create codespace on main**, os comandos acima funcionam no terminal.
+Ao terminar, pare o Codespace para não gastar horas: `gh codespace stop` ou, na página
+github.com/codespaces, **⋯ → Stop codespace**.
 
 ### Imagem publicada
 
@@ -109,29 +147,36 @@ Ele executa, nas versões 3.10, 3.11 e 3.12 do Python:
 3. Build do pacote (`python -m build`)
 4. Publicação dos arquivos gerados em `dist/` como artefato
 
-Depois disso, o job **Imagem Docker**:
+Depois disso, o job **Docker Compose**:
 
-1. Faz o build da imagem de testes e roda o `pytest` dentro do container
-2. Faz o build da imagem final e executa um teste de fumaça
+1. Roda os testes com `docker-compose.test.yml` (Postgres e Redis reais)
+2. Sobe a stack do `docker-compose.yml` e faz testes de fumaça na API e na CLI
 3. Em push na `main`, publica a imagem no GHCR (tags `latest` e SHA do commit)
 
 ## Estrutura do projeto
 
 ```
 calculadora-notas/
+├── .devcontainer/devcontainer.json
 ├── .github/workflows/ci.yml
 ├── .dockerignore
+├── .env.example
 ├── Dockerfile
 ├── docker-compose.yml
+├── docker-compose.test.yml
+├── db/init.sql
 ├── src/calculadora/
 │   ├── __init__.py
+│   ├── api.py
 │   ├── cli.py
 │   └── operacoes.py
 ├── tests/
+│   ├── test_api.py
 │   ├── test_cli.py
 │   └── test_operacoes.py
 ├── pyproject.toml
 ├── requirements.txt
+├── requirements-api.txt
 └── README.md
 ```
 

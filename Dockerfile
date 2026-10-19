@@ -38,8 +38,8 @@ FROM python:${PYTHON_VERSION}-slim AS test
 WORKDIR /app
 
 # Dependências primeiro (mudam pouco) -> camada reaproveitada do cache.
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-api.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-api.txt
 
 # Código e testes por último (mudam muito) -> só estas camadas são refeitas.
 COPY pyproject.toml README.md ./
@@ -66,6 +66,11 @@ LABEL org.opencontainers.image.title="calculadora-notas" \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# Dependências da API (Flask, Gunicorn, PostgreSQL e Redis) antes do pacote:
+# mudam pouco, então esta camada fica em cache.
+COPY requirements-api.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements-api.txt && rm -f /tmp/requirements-api.txt
+
 # Traz do estágio "build" APENAS o .whl pronto. Instala e apaga o arquivo
 # no mesmo RUN, para ele não ficar guardado em nenhuma camada.
 COPY --from=build /dist/*.whl /tmp/
@@ -78,5 +83,7 @@ WORKDIR /home/appuser
 
 # ENTRYPOINT fixa o executável; CMD é o argumento padrão (mostra a ajuda).
 # Assim: docker run calculadora-notas --aluno "Maria" --notas 8 7.5 9
+# A API usa a mesma imagem trocando o entrypoint por gunicorn (ver compose).
+EXPOSE 8000
 ENTRYPOINT ["calculadora"]
 CMD ["--help"]

@@ -23,3 +23,8 @@ coverage.xml
 .vscode/
 .idea/
 .DS_Store
+docker-compose.test.yml
+.devcontainer/
+.env
+.env.example
+db/
