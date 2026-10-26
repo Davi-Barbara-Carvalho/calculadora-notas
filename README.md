@@ -129,6 +129,28 @@ O repositório tem um `.devcontainer/devcontainer.json` com Python e Docker (ima
 Ao terminar, pare o Codespace para não gastar horas: `gh codespace stop` ou, na página
 github.com/codespaces, **⋯ → Stop codespace**.
 
+### Kubernetes (Minikube)
+
+A pasta `k8s/` tem os manifests para rodar a stack num cluster Kubernetes:
+
+| Arquivo           | Recursos                                                                 |
+|-------------------|--------------------------------------------------------------------------|
+| `postgres.yaml`   | Secret (credenciais), ConfigMap (`init.sql`), PVC, Deployment e Service `db` |
+| `redis.yaml`      | Deployment e Service `cache`                                             |
+| `deployment.yaml` | Deployment `calculadora-api` (2 réplicas, probes, limites, rolling update) |
+| `service.yaml`    | Service `calculadora-api-service` do tipo NodePort (30080)               |
+
+```bash
+minikube start --driver=docker
+kubectl apply -f k8s/postgres.yaml -f k8s/redis.yaml
+kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml
+kubectl get pods
+kubectl port-forward service/calculadora-api-service 8080:80   # http://localhost:8080/health
+kubectl scale deployment calculadora-api --replicas=4          # escalar
+kubectl rollout undo deployment/calculadora-api                # rollback
+kubectl delete -f k8s/ && minikube stop                        # limpeza
+```
+
 ### Imagem publicada
 
 A cada push na `main`, o CI publica a imagem no GitHub Container Registry:
@@ -165,6 +187,11 @@ calculadora-notas/
 ├── docker-compose.yml
 ├── docker-compose.test.yml
 ├── db/init.sql
+├── k8s/
+│   ├── deployment.yaml
+│   ├── postgres.yaml
+│   ├── redis.yaml
+│   └── service.yaml
 ├── src/calculadora/
 │   ├── __init__.py
 │   ├── api.py

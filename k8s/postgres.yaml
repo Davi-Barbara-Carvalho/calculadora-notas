@@ -1,0 +1,116 @@
+# Banco de dados PostgreSQL da Calculadora de Notas.
+# Credenciais no Secret, script de criação da tabela no ConfigMap
+# e dados em um PersistentVolumeClaim (sobrevivem ao restart do Pod).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: calculadora-db
+  labels:
+    app: calculadora-notas
+type: Opaque
+stringData:
+  POSTGRES_USER: calculadora
+  POSTGRES_PASSWORD: calculadora
+  POSTGRES_DB: calculadora
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calculadora-db-init
+  labels:
+    app: calculadora-notas
+data:
+  # Mesmo conteúdo de db/init.sql (executado só na 1ª inicialização do volume).
+  01-init.sql: |
+    CREATE TABLE IF NOT EXISTS boletins (
+        id        SERIAL PRIMARY KEY,
+        aluno     TEXT               NOT NULL,
+        notas     DOUBLE PRECISION[] NOT NULL,
+        media     DOUBLE PRECISION   NOT NULL,
+        situacao  TEXT               NOT NULL,
+        criado_em TIMESTAMPTZ        NOT NULL DEFAULT now()
+    );
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: calculadora-db-dados
+  labels:
+    app: calculadora-notas
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calculadora-db
+  labels:
+    app: calculadora-notas
+    componente: db
+spec:
+  replicas: 1
+  # Banco com volume ReadWriteOnce: derruba o Pod antigo antes de criar o novo.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      componente: db
+  template:
+    metadata:
+      labels:
+        app: calculadora-notas
+        componente: db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: calculadora-db
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: dados
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+      volumes:
+        - name: dados
+          persistentVolumeClaim:
+            claimName: calculadora-db-dados
+        - name: init
+          configMap:
+            name: calculadora-db-init
+---
+# Nome "db": é o host usado na DATABASE_URL da API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels:
+    app: calculadora-notas
+spec:
+  selector:
+    componente: db
+  ports:
+    - port: 5432
+      targetPort: 5432

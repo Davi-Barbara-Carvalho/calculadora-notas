@@ -1,0 +1,50 @@
+# Cache Redis da Calculadora de Notas (guarda a listagem GET /boletins).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calculadora-cache
+  labels:
+    app: calculadora-notas
+    componente: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      componente: cache
+  template:
+    metadata:
+      labels:
+        app: calculadora-notas
+        componente: cache
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "250m"
+---
+# Nome "cache": é o host usado na REDIS_URL da API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cache
+  labels:
+    app: calculadora-notas
+spec:
+  selector:
+    componente: cache
+  ports:
+    - port: 6379
+      targetPort: 6379

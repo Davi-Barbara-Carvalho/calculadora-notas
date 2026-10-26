@@ -1,0 +1,72 @@
+# API da Calculadora de Notas, usando a imagem publicada pelo CI no GHCR.
+#
+# Versões da imagem (tag = commit):
+#   c6aeec8 -> versão 0.1.0
+#   latest  -> versão mais nova (0.2.0, mostra "versao" no GET /health)
+# Para o rolling update, troque a tag em "image" e rode kubectl apply.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calculadora-api
+  labels:
+    app: calculadora-notas
+    componente: api
+  annotations:
+    kubernetes.io/change-cause: "versão 0.1.0 (imagem c6aeec8)"
+spec:
+  replicas: 2
+  # Atualização sem indisponibilidade: sobe 1 Pod novo por vez e só
+  # derruba um antigo quando o novo passa no readinessProbe.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      componente: api
+  template:
+    metadata:
+      labels:
+        app: calculadora-notas
+        componente: api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/davi-barbara-carvalho/calculadora-notas:c6aeec8
+          # A imagem tem a CLI como ENTRYPOINT; a API roda com gunicorn.
+          command: ["gunicorn"]
+          args: ["--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "calculadora.api:create_app()"]
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: calculadora-db
+          env:
+            - name: DATABASE_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@db:5432/$(POSTGRES_DB)
+            - name: REDIS_URL
+              value: redis://cache:6379/0
+            - name: CACHE_TTL
+              value: "60"
+          # Só recebe tráfego quando banco e cache respondem.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

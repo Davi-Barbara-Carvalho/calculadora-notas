@@ -1,0 +1,16 @@
+# Expõe a API na porta 30080 do nó do Minikube.
+# No Codespaces, acesse com: kubectl port-forward service/calculadora-api-service 8080:80
+apiVersion: v1
+kind: Service
+metadata:
+  name: calculadora-api-service
+  labels:
+    app: calculadora-notas
+spec:
+  type: NodePort
+  selector:
+    componente: api
+  ports:
+    - port: 80
+      targetPort: 8000
+      nodePort: 30080

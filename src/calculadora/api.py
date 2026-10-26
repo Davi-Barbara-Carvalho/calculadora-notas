@@ -16,6 +16,7 @@ import psycopg
 import redis
 from flask import Flask, jsonify, request
 
+from calculadora import __version__
 from calculadora.operacoes import NotaInvalidaError, boletim
 
 CHAVE_HISTORICO = "boletins:historico"
@@ -40,7 +41,7 @@ def create_app(database_url: str | None = None, redis_url: str | None = None) ->
         with conectar() as conn:
             conn.execute("SELECT 1")
         cache.ping()
-        return jsonify(status="ok", banco="ok", cache="ok")
+        return jsonify(status="ok", banco="ok", cache="ok", versao=__version__)
 
     @app.post("/boletins")
     def criar_boletim():

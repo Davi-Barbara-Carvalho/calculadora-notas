@@ -17,6 +17,7 @@ if not (os.environ.get("DATABASE_URL") and os.environ.get("REDIS_URL")):
 import psycopg  # noqa: E402
 import redis  # noqa: E402
 
+from calculadora import __version__  # noqa: E402
 from calculadora.api import create_app  # noqa: E402
 
 
@@ -33,7 +34,12 @@ def test_health(cliente):
     resposta = cliente.get("/health")
 
     assert resposta.status_code == 200
-    assert resposta.get_json() == {"status": "ok", "banco": "ok", "cache": "ok"}
+    assert resposta.get_json() == {
+        "status": "ok",
+        "banco": "ok",
+        "cache": "ok",
+        "versao": __version__,
+    }
 
 
 def test_cria_boletim_e_salva_no_banco(cliente):
