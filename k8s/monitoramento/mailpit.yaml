@@ -1,0 +1,54 @@
+# Mailpit: servidor SMTP de teste com interface web. Recebe os e-mails de
+# alerta do Grafana. Interface: kubectl -n monitoramento port-forward svc/mailpit 8025:8025
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: monitoramento
+  labels:
+    app: mailpit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailpit
+  template:
+    metadata:
+      labels:
+        app: mailpit
+    spec:
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:v1.20.0
+          ports:
+            - name: smtp
+              containerPort: 1025
+            - name: http
+              containerPort: 8025
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: monitoramento
+  labels:
+    app: mailpit
+spec:
+  type: NodePort
+  selector:
+    app: mailpit
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: smtp
+    - name: http
+      port: 8025
+      targetPort: http
+      nodePort: 30025

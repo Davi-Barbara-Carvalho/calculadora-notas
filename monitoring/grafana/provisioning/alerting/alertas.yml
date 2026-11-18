@@ -1,0 +1,243 @@
+# Alertas do Grafana (provisionados: aparecem em Alerting > Alert rules).
+#
+# Para onde vão: ponto de contato "email-equipe" -> SMTP configurado nas
+# variáveis GF_SMTP_* (por padrão o Mailpit, http://localhost:8025).
+#
+# Cada regra tem:
+#   A = consulta PromQL no Prometheus (valor instantâneo)
+#   C = limite (threshold) aplicado ao resultado de A
+#   for = por quanto tempo a condição precisa durar até o alerta disparar
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: email-equipe
+    receivers:
+      - uid: email-equipe
+        type: email
+        settings:
+          addresses: ${ALERTA_EMAIL}
+          singleEmail: true
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: email-equipe
+    group_by: ["grafana_folder", "alertname"]
+    group_wait: 10s
+    group_interval: 1m
+    repeat_interval: 4h
+
+groups:
+  - orgId: 1
+    name: disponibilidade
+    folder: Calculadora de Notas
+    interval: 15s
+    rules:
+      - uid: api-fora-do-ar
+        title: API fora do ar
+        condition: C
+        for: 30s
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          summary: Nenhuma réplica da API está respondendo ao Prometheus.
+          description: "Réplicas da API no ar: {{ .Values.A.Value }}. Verifique com 'docker compose ps' ou 'kubectl get pods'."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum(up{job="calculadora-api"}) or vector(0)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+
+      - uid: banco-fora-do-ar
+        title: PostgreSQL fora do ar
+        condition: C
+        for: 30s
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          summary: O postgres-exporter não consegue se conectar ao banco.
+          description: "pg_up = {{ .Values.A.Value }}. Sem o banco a API responde 500 em /boletins."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: min(pg_up)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+
+      - uid: cache-fora-do-ar
+        title: Redis fora do ar
+        condition: C
+        for: 30s
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          summary: O redis_exporter não consegue se conectar ao cache.
+          description: "redis_up = {{ .Values.A.Value }}."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: min(redis_up)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+
+  - orgId: 1
+    name: desempenho
+    folder: Calculadora de Notas
+    interval: 30s
+    rules:
+      - uid: taxa-de-erros-alta
+        title: Taxa de erros 5xx acima de 5%
+        condition: C
+        for: 1m
+        # Sem tráfego não há taxa de erro: não é motivo para alertar.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: alta
+        annotations:
+          summary: Mais de 5% das requisições da API estão falhando com erro 5xx.
+          description: "Taxa de erros nos últimos 2 minutos: {{ humanizePercentage .Values.A.Value }}."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum(rate(calculadora_http_requests_total{status=~"5.."}[2m])) / sum(rate(calculadora_http_requests_total[2m]))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.05] }
+
+      - uid: latencia-alta
+        title: Latência p95 acima de 500 ms
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: media
+        annotations:
+          summary: 5% das requisições estão demorando mais de meio segundo.
+          description: "p95 atual: {{ humanize .Values.A.Value }}s."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: histogram_quantile(0.95, sum by (le) (rate(calculadora_http_request_duration_seconds_bucket[5m])))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.5] }
+
+      - uid: memoria-container-alta
+        title: Container usando mais de 90% do limite de memória
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: media
+        annotations:
+          summary: Um container está perto do limite de memória e pode ser reiniciado (OOMKilled).
+          description: "Uso: {{ humanizePercentage .Values.A.Value }} do limite."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # Um resultado por serviço (api, db, cache...): cada um vira um alerta.
+              expr: max by (servico) (container_memory_working_set_bytes{servico!=""} / (container_spec_memory_limit_bytes{servico!=""} > 0))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.9] }
+
+  - orgId: 1
+    name: negocio
+    folder: Calculadora de Notas
+    interval: 1m
+    rules:
+      - uid: muitas-reprovacoes
+        title: Muitas reprovações nos últimos 10 minutos
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severidade: info
+        annotations:
+          summary: Mais de 20 boletins com situação "Reprovado" em 10 minutos.
+          description: "Reprovações em 10 min: {{ humanize .Values.A.Value }}."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum(increase(calculadora_boletins_total{situacao="Reprovado"}[10m]))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [20] }

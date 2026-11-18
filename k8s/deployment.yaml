@@ -2,8 +2,9 @@
 #
 # Versões da imagem (tag = commit):
 #   c6aeec8 -> versão 0.1.0
-#   latest  -> versão mais nova (0.2.0, mostra "versao" no GET /health)
-# Para o rolling update, troque a tag em "image" e rode kubectl apply.
+#   latest  -> versão mais nova (0.3.0, com métricas Prometheus em /metrics)
+# Para o rolling update, troque a tag em "image" (ou em "images" no
+# kustomization.yaml) e rode kubectl apply -k . de novo.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,7 +13,7 @@ metadata:
     app: calculadora-notas
     componente: api
   annotations:
-    kubernetes.io/change-cause: "versão 0.1.0 (imagem c6aeec8)"
+    kubernetes.io/change-cause: "versão 0.3.0 (métricas Prometheus)"
 spec:
   replicas: 2
   # Atualização sem indisponibilidade: sobe 1 Pod novo por vez e só
@@ -33,12 +34,15 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/davi-barbara-carvalho/calculadora-notas:c6aeec8
+          image: ghcr.io/davi-barbara-carvalho/calculadora-notas:latest
           # A imagem tem a CLI como ENTRYPOINT; a API roda com gunicorn.
           command: ["gunicorn"]
-          args: ["--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "calculadora.api:create_app()"]
+          args: ["-c", "python:calculadora.gunicorn_conf", "calculadora.api:create_app()"]
           ports:
-            - containerPort: 8000
+            # O Prometheus encontra os Pods pelo rótulo componente=api e
+            # coleta /metrics na porta chamada "http".
+            - name: http
+              containerPort: 8000
           envFrom:
             - secretRef:
                 name: calculadora-db
@@ -49,17 +53,22 @@ spec:
               value: redis://cache:6379/0
             - name: CACHE_TTL
               value: "60"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: /tmp/prometheus
+          volumeMounts:
+            - name: metricas
+              mountPath: /tmp/prometheus
           # Só recebe tráfego quando banco e cache respondem.
           readinessProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: http
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: http
             initialDelaySeconds: 20
             periodSeconds: 10
             failureThreshold: 3
@@ -70,3 +79,7 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "500m"
+      volumes:
+        # Pasta onde os workers do Gunicorn juntam as métricas (apagada com o Pod).
+        - name: metricas
+          emptyDir: {}

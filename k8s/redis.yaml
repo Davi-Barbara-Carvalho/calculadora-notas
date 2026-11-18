@@ -1,4 +1,5 @@
-# Cache Redis da Calculadora de Notas (guarda a listagem GET /boletins).
+# Cache Redis da Calculadora de Notas (guarda a listagem GET /boletins)
+# e o redis_exporter como sidecar, para o Prometheus.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,7 +22,8 @@ spec:
         - name: redis
           image: redis:7-alpine
           ports:
-            - containerPort: 6379
+            - name: redis
+              containerPort: 6379
           readinessProbe:
             exec:
               command: ["redis-cli", "ping"]
@@ -34,6 +36,22 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "250m"
+        # Sidecar: exporta as métricas do Redis para o Prometheus (porta "metrics").
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.62.0
+          ports:
+            - name: metrics
+              containerPort: 9121
+          env:
+            - name: REDIS_ADDR
+              value: redis://localhost:6379
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
 ---
 # Nome "cache": é o host usado na REDIS_URL da API.
 apiVersion: v1
