@@ -452,7 +452,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "kube_deployment_spec_replicas{namespace=\"$namespace\"}",
+          "expr": "sum by (deployment) (kube_deployment_spec_replicas{namespace=\"$namespace\"})",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -464,7 +464,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "kube_deployment_status_replicas_available{namespace=\"$namespace\"}",
+          "expr": "sum by (deployment) (kube_deployment_status_replicas_available{namespace=\"$namespace\"})",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -476,7 +476,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "kube_deployment_status_replicas_updated{namespace=\"$namespace\"}",
+          "expr": "sum by (deployment) (kube_deployment_status_replicas_updated{namespace=\"$namespace\"})",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -504,11 +504,9 @@
           "options": {
             "excludeByName": {
               "Time": true,
-              "__name__": true,
-              "instance": true,
-              "job": true,
-              "ambiente": true,
-              "namespace": true
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true
             },
             "renameByName": {
               "deployment": "Deployment",

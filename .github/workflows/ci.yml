@@ -240,9 +240,16 @@ jobs:
         run: |
           mkdir -p prints/kubernetes
           sleep 120   # deixa o gerador de tráfego encher os gráficos
-          kubectl get nodes,deployments,replicasets,pods,services -A -o wide | tee prints/kubernetes/kubectl-get.txt
+          { echo '$ kubectl get nodes,deployments,pods,services -A'
+            kubectl get nodes,deployments,pods,services -A; } | tee prints/kubernetes/kubectl-get.txt
+          { echo '$ kubectl -n default get deployments -o wide'
+            kubectl -n default get deployments -o wide
+            echo
+            echo '$ kubectl rollout history deployment/calculadora-api'
+            kubectl rollout history deployment/calculadora-api; } | tee prints/kubernetes/kubectl-deployments.txt
           python scripts/prints_grafana.py --saida prints/kubernetes \
-            --dashboards calculadora-api calculadora-containers kubernetes-cluster
+            --dashboards calculadora-api calculadora-containers kubernetes-cluster \
+            --terminal prints/kubernetes/kubectl-get.txt prints/kubernetes/kubectl-deployments.txt
 
       - name: Escalar e rolling update
         run: |

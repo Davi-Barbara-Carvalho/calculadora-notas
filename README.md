@@ -291,7 +291,9 @@ na pasta [`docs/prints/`](docs/prints).
 |---|---|
 | ![Prometheus](docs/prints/kubernetes/prometheus-alvos.png) | ![Alerta](docs/prints/kubernetes/alerta-grafana-alertas.png) |
 
-Saída do `kubectl get`: [`docs/prints/kubernetes/kubectl-get.txt`](docs/prints/kubernetes/kubectl-get.txt)
+| `kubectl get` (cluster, Deployments e Pods) | Deployments e histórico de rollout |
+|---|---|
+| ![kubectl get](docs/prints/kubernetes/terminal-kubectl-get.png) | ![Deployments](docs/prints/kubernetes/terminal-kubectl-deployments.png) |
 
 ## GitHub Codespaces
 

@@ -30,6 +30,10 @@ def main() -> None:
     parser.add_argument("--intervalo", default="now-15m", help="início do período dos gráficos")
     parser.add_argument("--prefixo", default="", help="prefixo dos nomes dos arquivos")
     parser.add_argument("--saida", default="prints")
+    parser.add_argument(
+        "--terminal", nargs="*", default=[],
+        help="arquivos .txt (ex.: saída do kubectl get) para virar print de terminal",
+    )
     args = parser.parse_args()
 
     saida = Path(args.saida)
@@ -86,6 +90,20 @@ def main() -> None:
                 salvar(pagina, nome)
             except Exception as erro:  # noqa: BLE001
                 print(f"sem print de {nome}: {erro}", flush=True)
+
+        # Saídas de terminal (kubectl get...) viram imagem com cara de terminal.
+        for arquivo in args.terminal:
+            texto = Path(arquivo).read_text(encoding="utf-8")
+            pagina.set_viewport_size({"width": 1900, "height": 600})
+            pagina.set_content(
+                "<body style='margin:0;background:#1e1e1e'>"
+                "<pre style='margin:0;padding:20px;color:#d4d4d4;font:13px/1.45 monospace;"
+                "white-space:pre'></pre></body>"
+            )
+            pagina.eval_on_selector("pre", "(el, t) => { el.textContent = t; }", texto)
+            largura = pagina.eval_on_selector("pre", "el => el.scrollWidth")
+            pagina.set_viewport_size({"width": max(800, largura), "height": 600})
+            salvar(pagina, f"terminal-{Path(arquivo).stem}")
 
         navegador.close()
 
