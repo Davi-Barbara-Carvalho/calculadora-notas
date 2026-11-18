@@ -1,0 +1,12 @@
+$ kubectl -n default get deployments -o wide
+NAME                  READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS                   IMAGES                                                                     SELECTOR
+calculadora-api       2/2     2            2           2m54s   api                          ghcr.io/davi-barbara-carvalho/calculadora-notas:ci                         componente=api
+calculadora-cache     1/1     1            1           2m54s   redis,redis-exporter         redis:7-alpine,oliver006/redis_exporter:v1.62.0                            componente=cache
+calculadora-db        1/1     1            1           2m54s   postgres,postgres-exporter   postgres:16-alpine,quay.io/prometheuscommunity/postgres-exporter:v0.15.0   componente=db
+calculadora-trafego   1/1     1            1           2m54s   trafego                      ghcr.io/davi-barbara-carvalho/calculadora-notas:ci                         componente=trafego
+
+$ kubectl rollout history deployment/calculadora-api
+deployment.apps/calculadora-api 
+REVISION  CHANGE-CAUSE
+1         versão 0.3.0 (métricas Prometheus)
+
