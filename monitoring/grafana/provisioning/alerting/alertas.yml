@@ -32,7 +32,7 @@ groups:
   - orgId: 1
     name: disponibilidade
     folder: Calculadora de Notas
-    interval: 15s
+    interval: 10s
     rules:
       - uid: api-fora-do-ar
         title: API fora do ar
