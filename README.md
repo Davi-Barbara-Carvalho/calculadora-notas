@@ -266,6 +266,33 @@ e publicam como artefatos `prints-docker-compose` e `prints-kubernetes` na pági
 Para tirar os prints na sua máquina: `python scripts/prints_grafana.py --saida prints/`
 (precisa de `pip install playwright && python -m playwright install chromium`).
 
+## Prints
+
+Gerados automaticamente pelo CI a cada push na `main` (job "Salvar prints no repositório"),
+na pasta [`docs/prints/`](docs/prints).
+
+### Docker Compose
+
+| Dashboard da API | Containers |
+|---|---|
+| ![API](docs/prints/docker-compose/grafana-calculadora-api.png) | ![Containers](docs/prints/docker-compose/grafana-calculadora-containers.png) |
+
+| Alerta disparado (Grafana) | E-mail do alerta (Mailpit) |
+|---|---|
+| ![Alertas](docs/prints/docker-compose/alerta-grafana-alertas.png) | ![Mailpit](docs/prints/docker-compose/alerta-mailpit-alertas.png) |
+
+### Kubernetes
+
+| Cluster | Dashboard da API |
+|---|---|
+| ![Cluster](docs/prints/kubernetes/grafana-kubernetes-cluster.png) | ![API](docs/prints/kubernetes/grafana-calculadora-api.png) |
+
+| Alvos do Prometheus | Alerta "API fora do ar" |
+|---|---|
+| ![Prometheus](docs/prints/kubernetes/prometheus-alvos.png) | ![Alerta](docs/prints/kubernetes/alerta-grafana-alertas.png) |
+
+Saída do `kubectl get`: [`docs/prints/kubernetes/kubectl-get.txt`](docs/prints/kubernetes/kubectl-get.txt)
+
 ## GitHub Codespaces
 
 O `.devcontainer/devcontainer.json` (imagem `universal:2`) já tem Python e Docker e encaminha as

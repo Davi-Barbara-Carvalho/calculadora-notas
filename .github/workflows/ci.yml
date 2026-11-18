@@ -284,3 +284,34 @@ jobs:
           kubectl -n monitoramento logs deployment/grafana --tail=200
           kubectl -n monitoramento logs deployment/prometheus --tail=100
           cat /tmp/pf-*.log
+
+  prints:
+    name: Salvar prints no repositório
+    runs-on: ubuntu-latest
+    needs: [docker, kubernetes]
+    # Só na main: guarda os prints gerados pelos jobs acima em docs/prints/.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Baixar os prints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: prints-*
+          merge-multiple: true
+          path: docs/prints
+
+      - name: Commit dos prints
+        run: |
+          ls -R docs/prints
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add docs/prints
+          # Push feito com o GITHUB_TOKEN não dispara o CI de novo.
+          git diff --cached --quiet || git commit -m "docs: prints do Grafana e do cluster gerados pelo CI [skip ci]"
+          git push
