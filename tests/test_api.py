@@ -90,3 +90,24 @@ def test_historico_usa_cache_e_e_invalidado(cliente):
 
     assert terceira.headers["X-Cache"] == "MISS"
     assert [b["aluno"] for b in terceira.get_json()] == ["João", "Ana"]
+
+
+def test_metricas_de_negocio_e_cache(cliente):
+    from prometheus_client import REGISTRY
+
+    def valor(nome, **labels):
+        return REGISTRY.get_sample_value(nome, labels) or 0.0
+
+    aprovados = valor("calculadora_boletins_total", situacao="Aprovado")
+    misses = valor("calculadora_cache_requests_total", resultado="miss")
+    hits = valor("calculadora_cache_requests_total", resultado="hit")
+
+    cliente.post("/boletins", json={"aluno": "Maria", "notas": [8, 7.5, 9]})
+    cliente.get("/boletins")
+    cliente.get("/boletins")
+
+    assert valor("calculadora_boletins_total", situacao="Aprovado") == aprovados + 1
+    assert valor("calculadora_cache_requests_total", resultado="miss") == misses + 1
+    assert valor("calculadora_cache_requests_total", resultado="hit") == hits + 1
+    assert valor("calculadora_db_query_duration_seconds_count", operacao="insert") >= 1
+    assert "calculadora_boletins_total" in cliente.get("/metrics").get_data(as_text=True)

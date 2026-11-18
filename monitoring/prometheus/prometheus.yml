@@ -1,0 +1,46 @@
+# Configuração do Prometheus para o Docker Compose.
+# (No Kubernetes a configuração é outra: monitoring/prometheus/prometheus-k8s.yml)
+#
+# Os nomes dos jobs são os mesmos nos dois ambientes, assim os dashboards
+# e as regras de alerta do Grafana funcionam igual no Compose e no Kubernetes.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    ambiente: docker-compose
+
+scrape_configs:
+  # O próprio Prometheus.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # API da Calculadora (instrumentada com prometheus_client, rota /metrics).
+  - job_name: calculadora-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  # PostgreSQL (via postgres-exporter).
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  # Redis (via redis_exporter).
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # Métricas de todos os containers (CPU, memória, rede, disco).
+  - job_name: cadvisor
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    metric_relabel_configs:
+      # Guarda só as séries dos containers do projeto (descarta cgroups do sistema).
+      - source_labels: [container_label_com_docker_compose_project]
+        regex: calculadora-notas
+        action: keep
+      # Rótulo "servico" = nome do serviço no compose (api, db, cache...).
+      - source_labels: [container_label_com_docker_compose_service]
+        target_label: servico

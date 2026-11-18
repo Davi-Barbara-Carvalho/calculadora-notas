@@ -1,0 +1,14 @@
+# Fonte de dados do Grafana (Compose e Kubernetes usam o mesmo arquivo).
+# O uid fixo "prometheus" é referenciado pelos dashboards e pelas regras de alerta.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s

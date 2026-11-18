@@ -1,0 +1,58 @@
+# Provisionamento completo no Kubernetes com um comando:
+#
+#   kubectl apply -k .
+#
+# Sobe a aplicação (API, PostgreSQL, Redis) no namespace "default" e o
+# monitoramento (Prometheus, kube-state-metrics, Grafana, Mailpit) no
+# namespace "monitoramento". As configurações do Prometheus e do Grafana
+# vêm da pasta monitoring/ (as mesmas do Docker Compose) e viram ConfigMaps.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Aplicação
+  - k8s/postgres.yaml
+  - k8s/redis.yaml
+  - k8s/deployment.yaml
+  - k8s/service.yaml
+  # Monitoramento
+  - k8s/monitoramento/namespace.yaml
+  - k8s/monitoramento/prometheus.yaml
+  - k8s/monitoramento/kube-state-metrics.yaml
+  - k8s/monitoramento/mailpit.yaml
+  - k8s/monitoramento/grafana.yaml
+
+# Versão da imagem da API. Para um rolling update para um commit específico:
+#   troque newTag para o SHA (ex.: "a1b2c3d") e rode kubectl apply -k . de novo.
+images:
+  - name: ghcr.io/davi-barbara-carvalho/calculadora-notas
+    newTag: latest
+
+# Os ConfigMaps ganham um sufixo com o hash do conteúdo: quando um dashboard
+# ou alerta muda, o Pod do Grafana/Prometheus é recriado automaticamente.
+configMapGenerator:
+  - name: prometheus-config
+    namespace: monitoramento
+    files:
+      - prometheus.yml=monitoring/prometheus/prometheus-k8s.yml
+  - name: grafana-datasources
+    namespace: monitoramento
+    files:
+      - monitoring/grafana/provisioning/datasources/prometheus.yml
+  - name: grafana-dashboards-provider
+    namespace: monitoramento
+    files:
+      - monitoring/grafana/provisioning/dashboards/dashboards.yml
+  - name: grafana-alerting
+    namespace: monitoramento
+    files:
+      - monitoring/grafana/provisioning/alerting/alertas.yml
+  - name: grafana-dashboards-calculadora
+    namespace: monitoramento
+    files:
+      - monitoring/grafana/dashboards/calculadora/calculadora-api.json
+      - monitoring/grafana/dashboards/calculadora/containers.json
+  - name: grafana-dashboards-kubernetes
+    namespace: monitoramento
+    files:
+      - monitoring/grafana/dashboards/kubernetes/cluster.json

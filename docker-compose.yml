@@ -1,18 +1,26 @@
-# Stack da Calculadora de Notas
+# Stack da Calculadora de Notas (aplicação + monitoramento)
 #
-#   docker compose up -d --build --wait     # sobe API + PostgreSQL + Redis
+#   docker compose up -d --build --wait     # sobe tudo
 #   docker compose ps                       # status e healthchecks
+#   docker compose --profile carga up -d trafego   # gera tráfego para os gráficos
 #   docker compose run --rm calculadora --aluno "Maria" --notas 8 7.5 9
 #   docker compose down                     # para tudo (os volumes ficam)
 #   docker compose down -v                  # para tudo e apaga os volumes
 #
+# Endereços:
+#   API         http://localhost:8000   (métricas em /metrics)
+#   Grafana     http://localhost:3000   (admin / admin)
+#   Prometheus  http://localhost:9090
+#   cAdvisor    http://localhost:8080
+#   Mailpit     http://localhost:8025   (caixa de entrada dos alertas)
+#
 # Senhas e portas podem ser trocadas num arquivo .env (veja .env.example).
 name: calculadora-notas
 
-# Imagem criada na atividade anterior (Dockerfile multi-stage, estágio
-# runtime), publicada pelo CI no GitHub Container Registry. Com "build"
-# junto, "docker compose up --build" gera a imagem localmente com o mesmo nome;
-# sem --build, "docker compose pull" baixa a versão publicada.
+# Imagem do projeto (Dockerfile multi-stage, estágio runtime), publicada pelo
+# CI no GitHub Container Registry. Com "build" junto, "docker compose up --build"
+# gera a imagem localmente com o mesmo nome; sem --build, "docker compose pull"
+# baixa a versão publicada.
 x-app-image: &app-image
   image: ${APP_IMAGE:-ghcr.io/davi-barbara-carvalho/calculadora-notas:latest}
   build:
@@ -20,15 +28,22 @@ x-app-image: &app-image
     target: runtime
 
 services:
-  # API HTTP: calcula boletins, grava no Postgres e usa o Redis como cache.
+  # ===========================================================================
+  # Aplicação
+  # ===========================================================================
+
+  # API HTTP: calcula boletins, grava no Postgres, usa o Redis como cache
+  # e expõe métricas para o Prometheus em /metrics.
   api:
     <<: *app-image
     entrypoint: ["gunicorn"]
-    command: ["--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "calculadora.api:create_app()"]
+    command: ["-c", "python:calculadora.gunicorn_conf", "calculadora.api:create_app()"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-calculadora}:${POSTGRES_PASSWORD:-calculadora}@db:5432/${POSTGRES_DB:-calculadora}
       REDIS_URL: redis://cache:6379/0
       CACHE_TTL: "60"
+      # Pasta onde os workers do Gunicorn juntam as métricas (modo multiprocess).
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -43,6 +58,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Limites de recursos: o cAdvisor mostra o uso em relação a eles
+    # e o Grafana alerta quando a memória passa de 90% do limite.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
     networks: [frontend, backend]
     restart: unless-stopped
 
@@ -61,6 +83,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
     networks: [backend]
     restart: unless-stopped
 
@@ -75,10 +102,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
     networks: [backend]
     restart: unless-stopped
 
-  # CLI da atividade anterior: só roda sob demanda (profile "cli").
+  # CLI das primeiras atividades: só roda sob demanda (profile "cli").
   #   docker compose run --rm calculadora --aluno "João" --notas 5 6 4
   calculadora:
     <<: *app-image
@@ -87,13 +119,140 @@ services:
     network_mode: none   # a CLI não precisa de rede
     restart: "no"
 
+  # Gerador de tráfego: faz requisições contínuas para os gráficos terem dados.
+  #   docker compose --profile carga up -d trafego
+  trafego:
+    <<: *app-image
+    entrypoint: ["python", "-m", "calculadora.trafego"]
+    command: ["--url", "http://api:8000", "--rps", "5"]
+    profiles: ["carga"]
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [backend]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Monitoramento
+  # ===========================================================================
+
+  # Prometheus: coleta as métricas da API, dos exporters e dos containers.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle   # permite recarregar a config com POST /-/reload
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    # "backend" para alcançar API e exporters; "monitoramento" para o Grafana.
+    networks: [backend, monitoramento]
+    restart: unless-stopped
+
+  # Grafana: dashboards e alertas, todos provisionados a partir de arquivos.
+  grafana:
+    image: grafana/grafana:11.3.1
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/calculadora/calculadora-api.json
+      # Alertas por e-mail. Por padrão vão para o Mailpit (caixa de entrada local);
+      # para usar um SMTP real (ex.: Gmail), troque estas variáveis no .env.
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: ${SMTP_HOST:-mailpit:1025}
+      GF_SMTP_USER: ${SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${SMTP_FROM:-grafana@calculadora.local}
+      GF_SMTP_FROM_NAME: Grafana - Calculadora de Notas
+      GF_SMTP_SKIP_VERIFY: "true"
+      ALERTA_EMAIL: ${ALERTA_EMAIL:-equipe@calculadora.local}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards/calculadora:/var/lib/grafana/dashboards/calculadora:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [monitoramento]
+    restart: unless-stopped
+
+  # cAdvisor: métricas de CPU, memória, rede e disco de cada container.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    command: ["--docker_only=true", "--housekeeping_interval=10s"]
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "${CADVISOR_PORT:-8080}:8080"
+    networks: [monitoramento]
+    restart: unless-stopped
+
+  # Exporter do PostgreSQL: conexões, transações, tamanho do banco...
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-calculadora}:${POSTGRES_PASSWORD:-calculadora}@db:5432/${POSTGRES_DB:-calculadora}?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    restart: unless-stopped
+
+  # Exporter do Redis: memória, clientes, hits/misses, comandos...
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    environment:
+      REDIS_ADDR: redis://cache:6379
+    depends_on:
+      cache:
+        condition: service_healthy
+    networks: [backend]
+    restart: unless-stopped
+
+  # Mailpit: servidor SMTP de teste com interface web, recebe os e-mails
+  # de alerta do Grafana (http://localhost:8025).
+  mailpit:
+    image: axllent/mailpit:v1.20.0
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+    networks: [monitoramento]
+    restart: unless-stopped
+
 networks:
   # Rede exposta: a porta da API é publicada por aqui.
   frontend:
-  # Rede interna: banco e cache não têm acesso externo nem portas publicadas.
+  # Rede interna: banco, cache e exporters não têm acesso externo nem portas publicadas.
   backend:
     internal: true
+  # Rede das ferramentas de monitoramento (Prometheus, Grafana, cAdvisor, Mailpit).
+  monitoramento:
 
 volumes:
   pgdata:
   redisdata:
+  prometheusdata:
+  grafanadata:

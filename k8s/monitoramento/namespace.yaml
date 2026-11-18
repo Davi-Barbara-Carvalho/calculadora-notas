@@ -1,0 +1,7 @@
+# Namespace separado para as ferramentas de monitoramento.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoramento
+  labels:
+    app: calculadora-notas

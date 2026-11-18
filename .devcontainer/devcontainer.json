@@ -3,9 +3,13 @@
   // que já traz Python e Docker para rodar "docker compose" no terminal.
   "name": "calculadora-notas",
   "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "forwardPorts": [8000],
+  "forwardPorts": [8000, 3000, 9090, 8025, 8080],
   "portsAttributes": {
-    "8000": { "label": "API calculadora-notas" }
+    "8000": { "label": "API calculadora-notas" },
+    "3000": { "label": "Grafana" },
+    "9090": { "label": "Prometheus" },
+    "8025": { "label": "Mailpit (alertas)" },
+    "8080": { "label": "cAdvisor" }
   },
   "hostRequirements": { "cpus": 2 },
   "customizations": {

@@ -1,0 +1,83 @@
+# Configuração do Prometheus para o Kubernetes (vai para um ConfigMap via kustomize).
+#
+# Os alvos são descobertos pela API do Kubernetes (kubernetes_sd_configs): quando
+# o Deployment escala para mais réplicas, os Pods novos entram sozinhos na coleta.
+# Os nomes dos jobs são os mesmos do Compose (monitoring/prometheus/prometheus.yml).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    ambiente: kubernetes
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # API: cada Pod com o rótulo componente=api, na porta chamada "http".
+  - job_name: calculadora-api
+    metrics_path: /metrics
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_componente, __meta_kubernetes_pod_container_port_name]
+        regex: api;http
+        action: keep
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  # PostgreSQL: sidecar postgres-exporter (porta "metrics") no Pod do banco.
+  - job_name: postgres
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_componente, __meta_kubernetes_pod_container_port_name]
+        regex: db;metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  # Redis: sidecar redis_exporter (porta "metrics") no Pod do cache.
+  - job_name: redis
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_componente, __meta_kubernetes_pod_container_port_name]
+        regex: cache;metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  # Métricas dos containers (cAdvisor embutido no kubelet de cada nó),
+  # lidas através do proxy da API do Kubernetes.
+  - job_name: cadvisor
+    scrape_interval: 10s
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    authorization:
+      credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: node
+    metric_relabel_configs:
+      # Rótulo "servico" = nome do container (api, postgres, redis...),
+      # o mesmo rótulo usado no Compose. Séries sem container ficam sem ele.
+      - source_labels: [container]
+        regex: (.+)
+        target_label: servico
+
+  # Estado dos objetos do cluster (Deployments, Pods, réplicas, reinícios...).
+  - job_name: kube-state-metrics
+    static_configs:
+      - targets: ["kube-state-metrics.monitoramento.svc:8080"]

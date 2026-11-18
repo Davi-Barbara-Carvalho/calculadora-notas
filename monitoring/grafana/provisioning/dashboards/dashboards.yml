@@ -1,0 +1,13 @@
+# Carrega os dashboards (arquivos .json) da pasta /var/lib/grafana/dashboards.
+# Cada subpasta vira uma pasta no Grafana.
+apiVersion: 1
+
+providers:
+  - name: calculadora-notas
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true
