@@ -6,7 +6,12 @@ Aplicação em Python que calcula médias escolares e informa a situação do al
 banco PostgreSQL, cache Redis e toda a parte de operação: imagens Docker, Docker Compose,
 Kubernetes, métricas no Prometheus e dashboards/alertas no Grafana.
 
-**Integrantes:** _(preencher)_
+**Integrantes:**
+
+| Nome                     | RA     |
+|--------------------------|--------|
+| Davi Barbara Carvalho    | 220455 |
+| Gustavo Rodrigues Barbosa| 219293 |
 
 ## O que foi implementado (conteúdo desde a B2)
 
