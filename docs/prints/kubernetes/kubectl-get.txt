@@ -1,0 +1,57 @@
+NAME                             STATUS   ROLES           AGE     VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION     CONTAINER-RUNTIME
+node/calculadora-control-plane   Ready    control-plane   3m12s   v1.35.0   172.18.0.2    <none>        Debian GNU/Linux 12 (bookworm)   7.0.0-1019-azure   containerd://2.2.0
+
+NAMESPACE            NAME                                     READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS                   IMAGES                                                                           SELECTOR
+default              deployment.apps/calculadora-api          2/2     2            2           2m49s   api                          ghcr.io/davi-barbara-carvalho/calculadora-notas:ci                               componente=api
+default              deployment.apps/calculadora-cache        1/1     1            1           2m49s   redis,redis-exporter         redis:7-alpine,oliver006/redis_exporter:v1.62.0                                  componente=cache
+default              deployment.apps/calculadora-db           1/1     1            1           2m49s   postgres,postgres-exporter   postgres:16-alpine,quay.io/prometheuscommunity/postgres-exporter:v0.15.0         componente=db
+default              deployment.apps/calculadora-trafego      1/1     1            1           2m49s   trafego                      ghcr.io/davi-barbara-carvalho/calculadora-notas:ci                               componente=trafego
+kube-system          deployment.apps/coredns                  2/2     2            2           3m10s   coredns                      registry.k8s.io/coredns/coredns:v1.13.1                                          k8s-app=kube-dns
+local-path-storage   deployment.apps/local-path-provisioner   1/1     1            1           3m9s    local-path-provisioner       docker.io/kindest/local-path-provisioner:v20251212-v0.29.0-alpha-105-g20ccfc88   app=local-path-provisioner
+monitoramento        deployment.apps/grafana                  1/1     1            1           2m49s   grafana                      grafana/grafana:11.3.1                                                           app=grafana
+monitoramento        deployment.apps/kube-state-metrics       1/1     1            1           2m49s   kube-state-metrics           registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.13.0                    app=kube-state-metrics
+monitoramento        deployment.apps/mailpit                  1/1     1            1           2m49s   mailpit                      axllent/mailpit:v1.20.0                                                          app=mailpit
+monitoramento        deployment.apps/prometheus               1/1     1            1           2m49s   prometheus                   prom/prometheus:v2.55.1                                                          app=prometheus
+
+NAMESPACE            NAME                                                DESIRED   CURRENT   READY   AGE     CONTAINERS                   IMAGES                                                                           SELECTOR
+default              replicaset.apps/calculadora-api-56c45cf6c           2         2         2       2m49s   api                          ghcr.io/davi-barbara-carvalho/calculadora-notas:ci                               componente=api,pod-template-hash=56c45cf6c
+default              replicaset.apps/calculadora-cache-b7d9cdd7d         1         1         1       2m49s   redis,redis-exporter         redis:7-alpine,oliver006/redis_exporter:v1.62.0                                  componente=cache,pod-template-hash=b7d9cdd7d
+default              replicaset.apps/calculadora-db-598b57f5c8           1         1         1       2m49s   postgres,postgres-exporter   postgres:16-alpine,quay.io/prometheuscommunity/postgres-exporter:v0.15.0         componente=db,pod-template-hash=598b57f5c8
+default              replicaset.apps/calculadora-trafego-7f8cdb98cf      1         1         1       2m48s   trafego                      ghcr.io/davi-barbara-carvalho/calculadora-notas:ci                               componente=trafego,pod-template-hash=7f8cdb98cf
+kube-system          replicaset.apps/coredns-7d764666f9                  2         2         2       3m5s    coredns                      registry.k8s.io/coredns/coredns:v1.13.1                                          k8s-app=kube-dns,pod-template-hash=7d764666f9
+local-path-storage   replicaset.apps/local-path-provisioner-67b8995b4b   1         1         1       3m5s    local-path-provisioner       docker.io/kindest/local-path-provisioner:v20251212-v0.29.0-alpha-105-g20ccfc88   app=local-path-provisioner,pod-template-hash=67b8995b4b
+monitoramento        replicaset.apps/grafana-8fb6d4d6                    1         1         1       2m49s   grafana                      grafana/grafana:11.3.1                                                           app=grafana,pod-template-hash=8fb6d4d6
+monitoramento        replicaset.apps/kube-state-metrics-fc7df6878        1         1         1       2m49s   kube-state-metrics           registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.13.0                    app=kube-state-metrics,pod-template-hash=fc7df6878
+monitoramento        replicaset.apps/mailpit-7dfd875f97                  1         1         1       2m49s   mailpit                      axllent/mailpit:v1.20.0                                                          app=mailpit,pod-template-hash=7dfd875f97
+monitoramento        replicaset.apps/prometheus-7ff944f99d               1         1         1       2m49s   prometheus                   prom/prometheus:v2.55.1                                                          app=prometheus,pod-template-hash=7ff944f99d
+
+NAMESPACE            NAME                                                    READY   STATUS    RESTARTS   AGE     IP            NODE                        NOMINATED NODE   READINESS GATES
+default              pod/calculadora-api-56c45cf6c-hp6d2                     1/1     Running   0          2m49s   10.244.0.6    calculadora-control-plane   <none>           <none>
+default              pod/calculadora-api-56c45cf6c-s5jmz                     1/1     Running   0          2m49s   10.244.0.5    calculadora-control-plane   <none>           <none>
+default              pod/calculadora-cache-b7d9cdd7d-8j5qq                   2/2     Running   0          2m49s   10.244.0.7    calculadora-control-plane   <none>           <none>
+default              pod/calculadora-db-598b57f5c8-dhgxs                     2/2     Running   0          2m49s   10.244.0.14   calculadora-control-plane   <none>           <none>
+default              pod/calculadora-trafego-7f8cdb98cf-mxhvf                1/1     Running   0          2m48s   10.244.0.13   calculadora-control-plane   <none>           <none>
+kube-system          pod/coredns-7d764666f9-9pnf6                            1/1     Running   0          3m4s    10.244.0.2    calculadora-control-plane   <none>           <none>
+kube-system          pod/coredns-7d764666f9-kk86d                            1/1     Running   0          3m4s    10.244.0.3    calculadora-control-plane   <none>           <none>
+kube-system          pod/etcd-calculadora-control-plane                      1/1     Running   0          3m11s   172.18.0.2    calculadora-control-plane   <none>           <none>
+kube-system          pod/kindnet-x2zvn                                       1/1     Running   0          3m4s    172.18.0.2    calculadora-control-plane   <none>           <none>
+kube-system          pod/kube-apiserver-calculadora-control-plane            1/1     Running   0          3m11s   172.18.0.2    calculadora-control-plane   <none>           <none>
+kube-system          pod/kube-controller-manager-calculadora-control-plane   1/1     Running   0          3m10s   172.18.0.2    calculadora-control-plane   <none>           <none>
+kube-system          pod/kube-proxy-nz6s7                                    1/1     Running   0          3m4s    172.18.0.2    calculadora-control-plane   <none>           <none>
+kube-system          pod/kube-scheduler-calculadora-control-plane            1/1     Running   0          3m11s   172.18.0.2    calculadora-control-plane   <none>           <none>
+local-path-storage   pod/local-path-provisioner-67b8995b4b-zznq7             1/1     Running   0          3m4s    10.244.0.4    calculadora-control-plane   <none>           <none>
+monitoramento        pod/grafana-8fb6d4d6-8n9tl                              1/1     Running   0          2m49s   10.244.0.8    calculadora-control-plane   <none>           <none>
+monitoramento        pod/kube-state-metrics-fc7df6878-hpzsr                  1/1     Running   0          2m49s   10.244.0.11   calculadora-control-plane   <none>           <none>
+monitoramento        pod/mailpit-7dfd875f97-57v64                            1/1     Running   0          2m49s   10.244.0.12   calculadora-control-plane   <none>           <none>
+monitoramento        pod/prometheus-7ff944f99d-92s5l                         1/1     Running   0          2m49s   10.244.0.10   calculadora-control-plane   <none>           <none>
+
+NAMESPACE       NAME                              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                         AGE     SELECTOR
+default         service/cache                     ClusterIP   10.96.156.80    <none>        6379/TCP                        2m49s   componente=cache
+default         service/calculadora-api-service   NodePort    10.96.193.61    <none>        80:30080/TCP                    2m49s   componente=api
+default         service/db                        ClusterIP   10.96.245.8     <none>        5432/TCP                        2m49s   componente=db
+default         service/kubernetes                ClusterIP   10.96.0.1       <none>        443/TCP                         3m11s   <none>
+kube-system     service/kube-dns                  ClusterIP   10.96.0.10      <none>        53/UDP,53/TCP,9153/TCP          3m10s   k8s-app=kube-dns
+monitoramento   service/grafana                   NodePort    10.96.17.197    <none>        3000:30030/TCP                  2m49s   app=grafana
+monitoramento   service/kube-state-metrics        ClusterIP   10.96.26.7      <none>        8080/TCP                        2m49s   app=kube-state-metrics
+monitoramento   service/mailpit                   NodePort    10.96.248.115   <none>        1025:32387/TCP,8025:30025/TCP   2m49s   app=mailpit
+monitoramento   service/prometheus                NodePort    10.96.90.76     <none>        9090:30090/TCP                  2m49s   app=prometheus
